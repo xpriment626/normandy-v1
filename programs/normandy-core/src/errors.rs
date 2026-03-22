@@ -31,4 +31,7 @@ pub enum NormandyError {
 
     #[msg("Invalid hook return data")]
     InvalidHookReturnData,
+
+    #[msg("Hook program does not match pool configuration")]
+    InvalidHookProgram,
 }
