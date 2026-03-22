@@ -1,7 +1,9 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
+use anchor_lang::solana_program::program::invoke_signed;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 
-use crate::constants::RAY;
+use crate::constants::{RAY, HOOK_IX_INITIALIZE};
 use crate::state::Pool;
 
 #[derive(Accounts)]
@@ -29,6 +31,11 @@ pub struct InitializePool<'info> {
     /// CHECK: Hook program to be used for credit decisions. Validated by caller.
     pub hook_program: UncheckedAccount<'info>,
 
+    /// CHECK: HookConfig PDA to be created by the hook program via CPI.
+    /// Seeds: ["hook_config", pool.key()] — validated by the hook program, not core.
+    #[account(mut)]
+    pub hook_config: UncheckedAccount<'info>,
+
     #[account(mut)]
     pub authority: Signer<'info>,
 
@@ -45,6 +52,8 @@ pub fn handle_initialize_pool(
     reserve_ratio_bips: u16,
     position_mode: u8,
     deposit_window_end: i64,
+    max_borrow_per_agent: u64,
+    require_pnl_positive: bool,
 ) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
     let clock = Clock::get()?;
@@ -77,7 +86,43 @@ pub fn handle_initialize_pool(
     pool.pool_id = pool_id;
     pool.bump = ctx.bumps.pool;
 
-    // CPI to hook_program::initialize will be wired in the hook integration step
+    // CPI to hook_program::initialize — create HookConfig for this pool
+    let mut ix_data = Vec::with_capacity(8 + 8 + 1);
+    ix_data.extend_from_slice(&HOOK_IX_INITIALIZE);
+    max_borrow_per_agent.serialize(&mut ix_data)?;
+    require_pnl_positive.serialize(&mut ix_data)?;
+
+    let ix = Instruction {
+        program_id: ctx.accounts.hook_program.key(),
+        accounts: vec![
+            AccountMeta::new(ctx.accounts.hook_config.key(), false),
+            AccountMeta::new_readonly(pool.key(), true),
+            AccountMeta::new(ctx.accounts.authority.key(), true),
+            AccountMeta::new_readonly(ctx.accounts.system_program.key(), false),
+        ],
+        data: ix_data,
+    };
+
+    let authority_key = ctx.accounts.authority.key();
+    let pool_id_bytes = pool_id.to_le_bytes();
+    let bump = [pool.bump];
+    let signer_seeds: &[&[u8]] = &[
+        Pool::SEED,
+        authority_key.as_ref(),
+        &pool_id_bytes,
+        &bump,
+    ];
+
+    invoke_signed(
+        &ix,
+        &[
+            ctx.accounts.hook_config.to_account_info(),
+            pool.to_account_info(),
+            ctx.accounts.authority.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+        ],
+        &[signer_seeds],
+    )?;
 
     Ok(())
 }

@@ -26,10 +26,13 @@ pub mod normandy_core {
         reserve_ratio_bips: u16,
         position_mode: u8,
         deposit_window_end: i64,
+        max_borrow_per_agent: u64,
+        require_pnl_positive: bool,
     ) -> Result<()> {
         instructions::initialize_pool::handle_initialize_pool(
             ctx, pool_id, interest_bips, term_seconds,
             reserve_ratio_bips, position_mode, deposit_window_end,
+            max_borrow_per_agent, require_pnl_positive,
         )
     }
 
