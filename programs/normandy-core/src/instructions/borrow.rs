@@ -1,7 +1,10 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
+use anchor_lang::solana_program::program::{invoke_signed, get_return_data};
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
-use crate::constants::BIP_DENOMINATOR;
+use crate::constants::{BIP_DENOMINATOR, HOOK_IX_ON_BORROW};
+use crate::cpi_interface::OnBorrowResult;
 use crate::errors::NormandyError;
 use crate::state::{BorrowerPosition, Pool};
 
@@ -34,11 +37,14 @@ pub struct Borrow<'info> {
     /// CHECK: Hook program for credit decisions. CPI target.
     pub hook_program: UncheckedAccount<'info>,
 
+    /// CHECK: HookConfig PDA owned by the hook program. Passed through to hook CPI.
+    pub hook_config: UncheckedAccount<'info>,
+
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
 
-pub fn handle_borrow(ctx: Context<Borrow>, amount: u64, _reputation_proof: Vec<u8>) -> Result<()> {
+pub fn handle_borrow(ctx: Context<Borrow>, amount: u64, reputation_proof: Vec<u8>) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
     let clock = Clock::get()?;
 
@@ -59,11 +65,67 @@ pub fn handle_borrow(ctx: Context<Borrow>, amount: u64, _reputation_proof: Vec<u
 
     require!(amount <= available, NormandyError::ReserveRatioBreached);
 
-    // CPI to hook_program::on_borrow will be wired in the hook integration step
-    // For now, MVP uses pool's fixed rate/term directly
+    // Validate hook program matches pool configuration
+    require!(
+        ctx.accounts.hook_program.key() == pool.hook_program,
+        NormandyError::InvalidHookProgram
+    );
 
-    let interest_bips = pool.min_interest_bips;
-    let term_seconds = pool.min_term_seconds;
+    // CPI to hook_program::on_borrow — credit decision
+    let agent_key = ctx.accounts.agent.key();
+    let mut ix_data = Vec::with_capacity(8 + 32 + 8 + 4 + reputation_proof.len() + 2 + 2 + 8 + 8);
+    ix_data.extend_from_slice(&HOOK_IX_ON_BORROW);
+    agent_key.serialize(&mut ix_data)?;
+    amount.serialize(&mut ix_data)?;
+    reputation_proof.serialize(&mut ix_data)?;
+    pool.min_interest_bips.serialize(&mut ix_data)?;
+    pool.max_interest_bips.serialize(&mut ix_data)?;
+    pool.min_term_seconds.serialize(&mut ix_data)?;
+    pool.max_term_seconds.serialize(&mut ix_data)?;
+
+    let ix = Instruction {
+        program_id: ctx.accounts.hook_program.key(),
+        accounts: vec![
+            AccountMeta::new_readonly(ctx.accounts.hook_config.key(), false),
+            AccountMeta::new_readonly(pool.key(), true),
+        ],
+        data: ix_data,
+    };
+
+    // Use hook_ prefix to avoid shadowing the token transfer signer seeds below
+    let hook_authority_key = pool.authority.key();
+    let hook_pool_id_bytes = pool.pool_id.to_le_bytes();
+    let hook_bump = [pool.bump];
+    let hook_signer_seeds: &[&[u8]] = &[
+        Pool::SEED,
+        hook_authority_key.as_ref(),
+        &hook_pool_id_bytes,
+        &hook_bump,
+    ];
+
+    invoke_signed(
+        &ix,
+        &[
+            ctx.accounts.hook_config.to_account_info(),
+            pool.to_account_info(),
+        ],
+        &[hook_signer_seeds],
+    )?;
+
+    // Parse return data from hook
+    let (returning_program, data) = get_return_data()
+        .ok_or(NormandyError::InvalidHookReturnData)?;
+    require!(
+        returning_program == ctx.accounts.hook_program.key(),
+        NormandyError::InvalidHookReturnData
+    );
+
+    let result = OnBorrowResult::try_from_slice(&data)
+        .map_err(|_| NormandyError::InvalidHookReturnData)?;
+    require!(result.approved, NormandyError::BorrowRejected);
+
+    let interest_bips = result.interest_bips;
+    let term_seconds = result.term_seconds;
 
     // Create borrower position
     let position = &mut ctx.accounts.borrower_position;
