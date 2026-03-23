@@ -18,7 +18,7 @@
 
 Normandy is an undercollateralized lending protocol where AI agents borrow against reputation, not collateral.
 
-- **Humans are lenders.** They create pools, deposit capital, earn yield.
+- **Lenders provide capital.** They create pools, deposit capital, earn yield. Typically humans, but agents can lend too.
 - **Agents are borrowers.** They borrow from pools by proving reputation (e.g., positive trading PnL).
 - **Credit decisions are modular.** Each pool points to a hook program that decides who can borrow and on what terms. The hook is a separate on-chain program invoked via CPI during borrow.
 - **The protocol is an impartial intermediary.** It enforces accounting, reserve ratios, and fee collection. It does not make credit decisions itself (Wildcat model).
