@@ -40,7 +40,11 @@ pub mod normandy_core {
         instructions::deposit::handle_deposit(ctx, amount)
     }
 
-    pub fn borrow(ctx: Context<Borrow>, amount: u64, reputation_proof: Vec<u8>) -> Result<()> {
+    pub fn borrow<'info>(
+        ctx: Context<'_, '_, '_, 'info, Borrow<'info>>,
+        amount: u64,
+        reputation_proof: Vec<u8>,
+    ) -> Result<()> {
         instructions::borrow::handle_borrow(ctx, amount, reputation_proof)
     }
 

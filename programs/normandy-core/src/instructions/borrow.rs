@@ -44,7 +44,11 @@ pub struct Borrow<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handle_borrow(ctx: Context<Borrow>, amount: u64, reputation_proof: Vec<u8>) -> Result<()> {
+pub fn handle_borrow<'info>(
+    ctx: Context<'_, '_, '_, 'info, Borrow<'info>>,
+    amount: u64,
+    reputation_proof: Vec<u8>,
+) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
     let clock = Clock::get()?;
 
@@ -83,12 +87,29 @@ pub fn handle_borrow(ctx: Context<Borrow>, amount: u64, reputation_proof: Vec<u8
     pool.min_term_seconds.serialize(&mut ix_data)?;
     pool.max_term_seconds.serialize(&mut ix_data)?;
 
+    // Forward any remaining_accounts to the hook (e.g. SATI ReputationScoreV3 attestation
+    // accounts for hook-sati-score). Preserve the caller's signer/writable flags so the hook
+    // can decide what to do with them.
+    let mut hook_accounts = vec![
+        AccountMeta::new_readonly(ctx.accounts.hook_config.key(), false),
+        AccountMeta::new_readonly(pool.key(), true),
+    ];
+    let mut hook_account_infos = vec![
+        ctx.accounts.hook_config.to_account_info(),
+        pool.to_account_info(),
+    ];
+    for acc in ctx.remaining_accounts.iter() {
+        hook_accounts.push(AccountMeta {
+            pubkey: acc.key(),
+            is_signer: acc.is_signer,
+            is_writable: acc.is_writable,
+        });
+        hook_account_infos.push(acc.clone());
+    }
+
     let ix = Instruction {
         program_id: ctx.accounts.hook_program.key(),
-        accounts: vec![
-            AccountMeta::new_readonly(ctx.accounts.hook_config.key(), false),
-            AccountMeta::new_readonly(pool.key(), true),
-        ],
+        accounts: hook_accounts,
         data: ix_data,
     };
 
@@ -103,14 +124,7 @@ pub fn handle_borrow(ctx: Context<Borrow>, amount: u64, reputation_proof: Vec<u8
         &hook_bump,
     ];
 
-    invoke_signed(
-        &ix,
-        &[
-            ctx.accounts.hook_config.to_account_info(),
-            pool.to_account_info(),
-        ],
-        &[hook_signer_seeds],
-    )?;
+    invoke_signed(&ix, &hook_account_infos, &[hook_signer_seeds])?;
 
     // Parse return data from hook
     let (returning_program, data) = get_return_data()
