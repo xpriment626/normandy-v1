@@ -8,6 +8,7 @@ skip-lint = false
 [programs.localnet]
 normandy_core = "3kXtyEqYxGTTnUtCpVNVwNwQjRZPYfGkEZo75tQtdwLs"
 normandy_hook_fixed_term = "He2SZJXMwPnyjN3dfuV8VEU2TPU58oR1HSWFkYvUgnNC"
+normandy_hook_sati_score = "5JGmhFpyEMapoDy7WkN3HeaASCeRdya2rC3utXPi5DwL"
 
 [registry]
 url = "https://api.apr.dev"
