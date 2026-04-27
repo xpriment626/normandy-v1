@@ -187,6 +187,12 @@ describe("Normandy V1 — Full Lifecycle Integration Test", () => {
   // Step 2: Initialize Pool (with hook CPI)
   // ─────────────────────────────────────────────────────────────────
   it("2. initialize_pool — creates Pool and HookConfig via CPI", async () => {
+    // hook-fixed-term init args: (max_borrow_per_agent: u64, require_pnl_positive: bool)
+    // Borsh: 8 bytes LE u64 + 1 byte bool = 9 bytes
+    const hookInitData = Buffer.alloc(9);
+    hookInitData.writeBigUInt64LE(BigInt(MAX_BORROW_PER_AGENT.toString()), 0);
+    hookInitData.writeUInt8(REQUIRE_PNL_POSITIVE ? 1 : 0, 8);
+
     const tx = await coreProgram.methods
       .initializePool(
         POOL_ID,
@@ -195,8 +201,7 @@ describe("Normandy V1 — Full Lifecycle Integration Test", () => {
         RESERVE_RATIO_BIPS,
         POSITION_MODE,
         DEPOSIT_WINDOW_END,
-        MAX_BORROW_PER_AGENT,
-        REQUIRE_PNL_POSITIVE
+        hookInitData
       )
       .accounts({
         pool: poolPda,

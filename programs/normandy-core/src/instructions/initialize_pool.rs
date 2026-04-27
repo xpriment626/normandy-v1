@@ -44,6 +44,7 @@ pub struct InitializePool<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn handle_initialize_pool(
     ctx: Context<InitializePool>,
     pool_id: u64,
@@ -52,8 +53,7 @@ pub fn handle_initialize_pool(
     reserve_ratio_bips: u16,
     position_mode: u8,
     deposit_window_end: i64,
-    max_borrow_per_agent: u64,
-    require_pnl_positive: bool,
+    hook_init_data: Vec<u8>,
 ) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
     let clock = Clock::get()?;
@@ -86,11 +86,13 @@ pub fn handle_initialize_pool(
     pool.pool_id = pool_id;
     pool.bump = ctx.bumps.pool;
 
-    // CPI to hook_program::initialize — create HookConfig for this pool
-    let mut ix_data = Vec::with_capacity(8 + 8 + 1);
+    // CPI to hook_program::initialize — create HookConfig for this pool.
+    // hook_init_data is opaque: caller serializes their hook's init args borsh-style,
+    // we just append after the discriminator. Mirrors how borrow forwards
+    // reputation_proof — keeps core agnostic to hook-specific schemas.
+    let mut ix_data = Vec::with_capacity(8 + hook_init_data.len());
     ix_data.extend_from_slice(&HOOK_IX_INITIALIZE);
-    max_borrow_per_agent.serialize(&mut ix_data)?;
-    require_pnl_positive.serialize(&mut ix_data)?;
+    ix_data.extend_from_slice(&hook_init_data);
 
     let ix = Instruction {
         program_id: ctx.accounts.hook_program.key(),
