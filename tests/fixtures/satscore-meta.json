@@ -1,0 +1,14 @@
+{
+  "description": "Static SAS attestation fixture for hook-sati-score happy path",
+  "generatedAt": "2026-04-27T10:28:00.768Z",
+  "sasProgramId": "22zoJMtdu4tQc2PzL74ZUT7FrwgB1Udec8DdW4yw4BdG",
+  "credential": "EkSNBtPHaGJakXs2fav78TnsXzSWCyj1PcvqMmW1HkvB",
+  "schema": "6TmzkNaSQX8LwD8WDbe4UxYHAJ9ovGmVwxdc71daf33T",
+  "provider": "FZsWeZnhJn5FuegL5prp3Rqebpaz1fKeWDnNxEEaYEhD",
+  "agentMint": "ALdB772hZLahuoyi6WTcQwXKhPCisWFoeUhDknYsX8bF",
+  "attestationPda": "FgavPJLys9oZ6RzAX1o93HYQG2jv7Uwp9XdMda2sjoHw",
+  "nonceHex": "682fe8a076bea8db13486d5c0cb79744888205108e5949c7b3c01a0067328ec9",
+  "outcome": 2,
+  "expiry": 0,
+  "attestationByteSize": 341
+}

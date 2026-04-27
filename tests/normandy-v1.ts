@@ -11,6 +11,7 @@ import {
 } from "@solana/spl-token";
 import { PublicKey, Keypair, SystemProgram, SYSVAR_RENT_PUBKEY } from "@solana/web3.js";
 import { assert } from "chai";
+import { FEE_RECIPIENT, ensureProtocolConfig } from "./utils/test-env";
 
 describe("Normandy V1 — Full Lifecycle Integration Test", () => {
   const provider = anchor.AnchorProvider.env();
@@ -23,7 +24,7 @@ describe("Normandy V1 — Full Lifecycle Integration Test", () => {
   const authority = provider.wallet.payer; // pool creator & protocol admin
   const lender = Keypair.generate();
   const agent = Keypair.generate(); // borrower
-  const feeRecipient = Keypair.generate();
+  const feeRecipient = FEE_RECIPIENT; // shared deterministic — see tests/utils/test-env.ts
 
   // Token mint (6 decimals, USDC-like)
   let usdcMint: PublicKey;
@@ -163,24 +164,16 @@ describe("Normandy V1 — Full Lifecycle Integration Test", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────
-  // Step 1: Initialize Protocol
+  // Step 1: Initialize Protocol (idempotent — may already exist if another
+  //          test file ran first; both files share the singleton)
   // ─────────────────────────────────────────────────────────────────
   it("1. initialize_protocol — creates ProtocolConfig with fee_recipient", async () => {
-    const tx = await coreProgram.methods
-      .initializeProtocol(feeRecipient.publicKey)
-      .accounts({
-        protocolConfig: protocolConfigPda,
-        authority: authority.publicKey,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc();
-
-    console.log(`    tx: ${tx}`);
+    await ensureProtocolConfig(coreProgram, authority);
 
     const config = await coreProgram.account.protocolConfig.fetch(protocolConfigPda);
     assert.ok(config.authority.equals(authority.publicKey), "authority matches");
     assert.ok(config.feeRecipient.equals(feeRecipient.publicKey), "fee_recipient matches");
-    console.log("    ProtocolConfig created successfully");
+    console.log("    ProtocolConfig present");
   });
 
   // ─────────────────────────────────────────────────────────────────
