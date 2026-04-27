@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 
+#[derive(PartialEq, Eq)]
 #[error_code]
 pub enum HookError {
     #[msg("Borrow amount exceeds per-agent cap")]

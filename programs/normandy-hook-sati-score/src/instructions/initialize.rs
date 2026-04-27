@@ -23,9 +23,12 @@ pub struct Initialize<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn handle_initialize(
     ctx: Context<Initialize>,
     max_borrow_per_agent: u64,
+    credential: Pubkey,
+    schema: Pubkey,
     allowed_providers: Vec<Pubkey>,
     min_outcome: u8,
     max_score_age_seconds: i64,
@@ -36,11 +39,19 @@ pub fn handle_initialize(
         HookError::InvalidHookConfig
     );
     require!(min_outcome <= 2, HookError::InvalidHookConfig);
-    require!(max_score_age_seconds > 0, HookError::InvalidHookConfig);
+    require!(max_score_age_seconds >= 0, HookError::InvalidHookConfig);
+    // Defensive: credential and schema must be set. The default Pubkey (all
+    // zeroes) is never a valid SAS PDA, so reject it explicitly.
+    require!(
+        credential != Pubkey::default() && schema != Pubkey::default(),
+        HookError::InvalidHookConfig
+    );
 
     let config = &mut ctx.accounts.hook_config;
     config.pool = ctx.accounts.pool.key();
     config.max_borrow_per_agent = max_borrow_per_agent;
+    config.credential = credential;
+    config.schema = schema;
     config.allowed_providers = allowed_providers;
     config.min_outcome = min_outcome;
     config.max_score_age_seconds = max_score_age_seconds;

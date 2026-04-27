@@ -13,9 +13,12 @@ declare_id!("5JGmhFpyEMapoDy7WkN3HeaASCeRdya2rC3utXPi5DwL");
 pub mod normandy_hook_sati_score {
     use super::*;
 
+    #[allow(clippy::too_many_arguments)]
     pub fn initialize(
         ctx: Context<Initialize>,
         max_borrow_per_agent: u64,
+        credential: Pubkey,
+        schema: Pubkey,
         allowed_providers: Vec<Pubkey>,
         min_outcome: u8,
         max_score_age_seconds: i64,
@@ -23,6 +26,8 @@ pub mod normandy_hook_sati_score {
         instructions::initialize::handle_initialize(
             ctx,
             max_borrow_per_agent,
+            credential,
+            schema,
             allowed_providers,
             min_outcome,
             max_score_age_seconds,
